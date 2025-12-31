@@ -1,0 +1,99 @@
+blueprint:
+  name: Philips Hue Dimmer (v2) - Custom Dim Logic
+  description: Control lights with Hue Dimmer 929002398602. Off button dims to 10%.
+  domain: automation
+  input:
+    remote_device:
+      name: Hue Dimmer Switch
+      selector:
+        device: {}
+    light_entity:
+      name: Light Entity
+      selector:
+        target:
+          entity:
+            domain: light
+    brightness_step:
+      name: Brightness Step
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+          unit_of_measurement: "%"
+
+mode: restart
+
+trigger:
+  - platform: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: "on"
+    id: "on"
+  - platform: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: "off"
+    id: "dim_to_min"
+  - platform: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: "up_press"
+    id: "br_up"
+  - platform: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: "down_press"
+    id: "br_down"
+  - platform: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: "hue"
+    id: "color_cycle"
+
+action:
+  - choose:
+      # ON BUTTON: 100% Brightness
+      - conditions: [{condition: trigger, id: "on"}]
+        sequence:
+          - action: light.turn_on
+            target: !input light_entity
+            data:
+              brightness_pct: 100
+
+      # OFF BUTTON: Dims to 10% (Does NOT turn off)
+      - conditions: [{condition: trigger, id: "dim_to_min"}]
+        sequence:
+          - action: light.turn_on
+            target: !input light_entity
+            data:
+              brightness_pct: 10
+
+      # UP BUTTON: Increase Brightness
+      - conditions: [{condition: trigger, id: "br_up"}]
+        sequence:
+          - action: light.turn_on
+            target: !input light_entity
+            data:
+              brightness_step_pct: !input brightness_step
+
+      # DOWN BUTTON: Decrease Brightness
+      - conditions: [{condition: trigger, id: "br_down"}]
+        sequence:
+          - action: light.turn_on
+            target: !input light_entity
+            data:
+              brightness_step_pct: -{{ states(brightness_step) | int(10) }}
+
+      # HUE BUTTON: Cycle Warmth (Warmer with every click)
+      - conditions: [{condition: trigger, id: "color_cycle"}]
+        sequence:
+          - action: light.turn_on
+            target: !input light_entity
+            data:
+              color_temp_kelvin: 2700 # Sets it to a Warm White
