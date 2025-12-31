@@ -1,47 +1,34 @@
 blueprint:
-  name: Styrbar Remote Control for Lights (Flexible)
-  description: Control IKEA Styrbar remote. Device selection is unrestricted.
+  name: Styrbar Remote Control (Custom Dim & Color)
+  description: Control IKEA Styrbar. Off button dims instead of turning off. Arrows change color warmth.
   domain: automation
   input:
     mqtt_device:
       name: Styrbar Remote Control
-      description: Select your Styrbar Remote from the list.
       selector:
         device: {}
     light_entity:
       name: Light Entity
-      description: The light to control.
       selector:
         target:
           entity:
             domain: light
     brightness_step:
       name: Brightness Step
-      default: 5
+      default: 10
       selector:
         number:
           min: 1
           max: 100
-          step: 1
           unit_of_measurement: "%"
-    delay_ms:
-      name: Delay (ms) Between Steps
-      default: 300
+    color_step:
+      name: Color Temperature Step
+      default: 500
       selector:
         number:
           min: 100
           max: 2000
-          step: 100
-          unit_of_measurement: "ms"
-    transition_seconds:
-      name: Transition Time
-      default: 1
-      selector:
-        number:
-          min: 0.1
-          max: 10
-          step: 0.1
-          unit_of_measurement: "s"
+          unit_of_measurement: "K"
 
 mode: restart
 
@@ -57,7 +44,7 @@ trigger:
     domain: mqtt
     type: action
     subtype: "off"
-    id: light_off
+    id: light_dim_only
   - platform: device
     device_id: !input mqtt_device
     domain: mqtt
@@ -74,31 +61,34 @@ trigger:
     device_id: !input mqtt_device
     domain: mqtt
     type: action
-    subtype: brightness_stop
-    id: dim_stop
-  - platform: device
-    device_id: !input mqtt_device
-    domain: mqtt
-    type: action
     subtype: arrow_left_click
-    id: color_left
+    id: color_warmer
   - platform: device
     device_id: !input mqtt_device
     domain: mqtt
     type: action
     subtype: arrow_right_click
-    id: color_right
+    id: color_cooler
 
 action:
   - choose:
+      # ON BUTTON: Full Brightness
       - conditions: [{condition: trigger, id: light_on}]
         sequence:
           - action: light.turn_on
             target: !input light_entity
-      - conditions: [{condition: trigger, id: light_off}]
+            data:
+              brightness_pct: 100
+
+      # OFF BUTTON: Set to 10% instead of Off
+      - conditions: [{condition: trigger, id: light_dim_only}]
         sequence:
-          - action: light.turn_off
+          - action: light.turn_on
             target: !input light_entity
+            data:
+              brightness_pct: 10
+
+      # BRIGHTNESS UP (HOLD)
       - conditions: [{condition: trigger, id: dim_up}]
         sequence:
           - repeat:
@@ -108,8 +98,9 @@ action:
                   target: !input light_entity
                   data:
                     brightness_step_pct: !input brightness_step
-                    transition: !input transition_seconds
-                - delay: {milliseconds: !input delay_ms}
+                - delay: {milliseconds: 300}
+
+      # BRIGHTNESS DOWN (HOLD)
       - conditions: [{condition: trigger, id: dim_down}]
         sequence:
           - repeat:
@@ -118,6 +109,21 @@ action:
                 - action: light.turn_on
                   target: !input light_entity
                   data:
-                    brightness_step_pct: -{{ states(brightness_step) | int(5) }}
-                    transition: !input transition_seconds
-                - delay: {milliseconds: !input delay_ms}
+                    brightness_step_pct: -10
+                - delay: {milliseconds: 300}
+
+      # LEFT ARROW: Warmer (Lower Kelvin)
+      - conditions: [{condition: trigger, id: color_warmer}]
+        sequence:
+          - action: light.turn_on
+            target: !input light_entity
+            data:
+              color_temp_kelvin: "{{ (state_attr(device_entities(device_id( 'mqtt_device' ))[0], 'color_temp_kelvin') | default(3000, true)) - 500 }}"
+
+      # RIGHT ARROW: Cooler (Higher Kelvin)
+      - conditions: [{condition: trigger, id: color_cooler}]
+        sequence:
+          - action: light.turn_on
+            target: !input light_entity
+            data:
+              color_temp_kelvin: "{{ (state_attr(device_entities(device_id( 'mqtt_device' ))[0], 'color_temp_kelvin') | default(3000, true)) + 500 }}"
