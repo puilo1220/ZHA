@@ -1,6 +1,6 @@
 blueprint:
-  name: "Hue Dimmer v2 for IKEA TRADFRI Bulb"
-  description: "Specialized for Hue Dimmer 929002398602 + IKEA TRADFRI WS Bulb via Zigbee2MQTT."
+  name: "Hue Dimmer v2 for IKEA TRADFRI Bulb - Fixed"
+  description: "Fixed template for Hue Dimmer 929002398602 + IKEA TRADFRI Bulb."
   domain: automation
   input:
     remote_device:
@@ -22,6 +22,10 @@ blueprint:
           min: 1
           max: 50
           unit_of_measurement: "%"
+
+# This part is the fix: It converts the input into a variable the template can see
+variables:
+  target_light: !input light_entity
 
 mode: restart
 
@@ -59,7 +63,6 @@ trigger:
 
 action:
   - choose:
-      # ON BUTTON: Full Power
       - conditions: [{condition: trigger, id: "on"}]
         sequence:
           - action: light.turn_on
@@ -67,7 +70,6 @@ action:
             data:
               brightness_pct: 100
 
-      # OFF BUTTON: Dim to 5% (Nightlight mode)
       - conditions: [{condition: trigger, id: "dim_to_min"}]
         sequence:
           - action: light.turn_on
@@ -75,7 +77,6 @@ action:
             data:
               brightness_pct: 5
 
-      # UP BUTTON: Increase Brightness
       - conditions: [{condition: trigger, id: "br_up"}]
         sequence:
           - action: light.turn_on
@@ -83,26 +84,25 @@ action:
             data:
               brightness_step_pct: !input brightness_step
 
-      # DOWN BUTTON: Decrease Brightness
       - conditions: [{condition: trigger, id: "br_down"}]
         sequence:
           - action: light.turn_on
             target: !input light_entity
             data:
-              brightness_step_pct: -{{ states(brightness_step) | int(10) }}
+              brightness_step_pct: -10
 
-      # HUE BUTTON: Change Color Temperature
-      # Cycles through Warm, Neutral, and Cold
       - conditions: [{condition: trigger, id: "color_cycle"}]
         sequence:
           - action: light.turn_on
             target: !input light_entity
             data:
+              # This template is now simplified and safe
               color_temp_kelvin: >
-                {% if state_attr((!input light_entity).entity_id[0], 'color_temp_kelvin') > 3500 %}
+                {% set entity = target_light.entity_id %}
+                {% if state_attr(entity, 'color_temp_kelvin') | default(3000, true) > 3500 %}
                   2700
-                {% elif state_attr((!input light_entity).entity_id[0], 'color_temp_kelvin') > 2800 %}
-                  4000
+                {% elif state_attr(entity, 'color_temp_kelvin') | default(3000, true) > 2800 %}
+                  4500
                 {% else %}
-                  3000
+                  3200
                 {% endif %}
