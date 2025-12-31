@@ -7,8 +7,8 @@ blueprint:
       name: Hue Dimmer Action Sensor
       description: "Pick the 'Action' sensor of your remote (e.g., sensor.hue_dimmer_action)"
       selector:
-        entity:
-          domain: sensor
+        device:
+          integration: mqtt
     light_entity:
       name: Light Entity
       selector:
