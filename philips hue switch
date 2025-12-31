@@ -1,6 +1,6 @@
 blueprint:
-  name: "Hue Dimmer v2 - Device Based"
-  description: "Select the Hue Dimmer device directly. Works with IKEA TRADFRI Bulbs."
+  name: "Hue Dimmer v2 for IKEA - Trigger ID Version"
+  description: "Select the Hue Dimmer device. Off button dims to 5%."
   domain: automation
   input:
     remote_device:
@@ -30,60 +30,76 @@ trigger:
     domain: mqtt
     device_id: !input remote_device
     type: action
-    # We don't specify subtype here so it triggers on ANY button press
-    # and then we handle the specific button in the 'action' section.
+    subtype: "on-press"
+    id: "on"
+  - platform: device
+    domain: mqtt
+    device_id: !input remote_device
+    type: action
+    subtype: "off-press"
+    id: "dim_to_min"
+  - platform: device
+    domain: mqtt
+    device_id: !input remote_device
+    type: action
+    subtype: "up-press"
+    id: "br_up"
+  - platform: device
+    domain: mqtt
+    device_id: !input remote_device
+    type: action
+    subtype: "down-press"
+    id: "br_down"
+  - platform: device
+    domain: mqtt
+    device_id: !input remote_device
+    type: action
+    subtype: "hue-press"
+    id: "color"
 
 action:
-  - vars:
-      # This pulls the button name from the trigger data
-      action_sent: "{{ trigger.subtype }}"
-      # This handles the light entity for the template
-      target_input: !input light_entity
   - choose:
-      # ON BUTTON
-      - conditions: "{{ action_sent in ['on', 'on-press', 'on_press'] }}"
+      - conditions:
+          - condition: trigger
+            id: "on"
         sequence:
           - service: light.turn_on
             target: !input light_entity
             data:
               brightness_pct: 100
 
-      # OFF BUTTON (Dims to 5%)
-      - conditions: "{{ action_sent in ['off', 'off-press', 'off_press'] }}"
+      - conditions:
+          - condition: trigger
+            id: "dim_to_min"
         sequence:
           - service: light.turn_on
             target: !input light_entity
             data:
               brightness_pct: 5
 
-      # UP BUTTON
-      - conditions: "{{ action_sent in ['up-press', 'up_press', 'brightness_move_up'] }}"
+      - conditions:
+          - condition: trigger
+            id: "br_up"
         sequence:
           - service: light.turn_on
             target: !input light_entity
             data:
               brightness_step_pct: !input brightness_step
 
-      # DOWN BUTTON
-      - conditions: "{{ action_sent in ['down-press', 'down_press', 'brightness_move_down'] }}"
+      - conditions:
+          - condition: trigger
+            id: "br_down"
         sequence:
           - service: light.turn_on
             target: !input light_entity
             data:
               brightness_step_pct: -10
 
-      # HUE BUTTON (Color Cycle)
-      - conditions: "{{ action_sent in ['hue', 'hue-press', 'hue_press'] }}"
+      - conditions:
+          - condition: trigger
+            id: "color"
         sequence:
           - service: light.turn_on
             target: !input light_entity
             data:
-              color_temp_kelvin: >
-                {% set entity = target_input.entity_id if target_input.entity_id is string else (target_input.entity_id[0] if target_input.entity_id is list else none) %}
-                {% if entity and state_attr(entity, 'color_temp_kelvin') | default(3000, true) > 3500 %}
-                  2700
-                {% elif entity and state_attr(entity, 'color_temp_kelvin') | default(3000, true) > 2800 %}
-                  4500
-                {% else %}
-                  3200
-                {% endif %}
+              color_temp_kelvin: 3000
