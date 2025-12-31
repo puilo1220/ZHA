@@ -1,14 +1,13 @@
 blueprint:
-  name: "Hue Dimmer v2 - Final Fix"
-  description: "Compatible with Hue Dimmer 929002398602 and IKEA TRADFRI Bulbs."
+  name: "Hue Dimmer v2 - Device Based"
+  description: "Select the Hue Dimmer device directly. Works with IKEA TRADFRI Bulbs."
   domain: automation
   input:
-    remote_sensor:
-      name: Hue Dimmer Action Sensor
-      description: "Pick the 'Action' sensor (e.g., sensor.hue_dimmer_action)"
+    remote_device:
+      name: Hue Dimmer Switch
       selector:
-        entity:
-          domain: sensor
+        device:
+          integration: mqtt
     light_entity:
       name: Light Entity
       selector:
@@ -27,14 +26,18 @@ blueprint:
 mode: restart
 
 trigger:
-  - platform: state
-    entity_id: !input remote_sensor
+  - platform: device
+    domain: mqtt
+    device_id: !input remote_device
+    type: action
+    # We don't specify subtype here so it triggers on ANY button press
+    # and then we handle the specific button in the 'action' section.
 
 action:
   - vars:
-      # Capture the button pressed
-      action_sent: "{{ trigger.to_state.state }}"
-      # Capture the light ID for the template
+      # This pulls the button name from the trigger data
+      action_sent: "{{ trigger.subtype }}"
+      # This handles the light entity for the template
       target_input: !input light_entity
   - choose:
       # ON BUTTON
@@ -76,10 +79,10 @@ action:
             target: !input light_entity
             data:
               color_temp_kelvin: >
-                {% set entity = target_input.entity_id if target_input.entity_id is string else target_input.entity_id[0] %}
-                {% if state_attr(entity, 'color_temp_kelvin') | default(3000, true) > 3500 %}
+                {% set entity = target_input.entity_id if target_input.entity_id is string else (target_input.entity_id[0] if target_input.entity_id is list else none) %}
+                {% if entity and state_attr(entity, 'color_temp_kelvin') | default(3000, true) > 3500 %}
                   2700
-                {% elif state_attr(entity, 'color_temp_kelvin') | default(3000, true) > 2800 %}
+                {% elif entity and state_attr(entity, 'color_temp_kelvin') | default(3000, true) > 2800 %}
                   4500
                 {% else %}
                   3200
