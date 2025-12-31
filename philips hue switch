@@ -1,12 +1,13 @@
 blueprint:
-  name: Philips Hue Dimmer (v2) - Custom Dim Logic
-  description: Control lights with Hue Dimmer 929002398602. Off button dims to 10%.
+  name: "Hue Dimmer v2 for IKEA TRADFRI Bulb"
+  description: "Specialized for Hue Dimmer 929002398602 + IKEA TRADFRI WS Bulb via Zigbee2MQTT."
   domain: automation
   input:
     remote_device:
       name: Hue Dimmer Switch
       selector:
-        device: {}
+        device:
+          integration: mqtt
     light_entity:
       name: Light Entity
       selector:
@@ -29,36 +30,36 @@ trigger:
     device_id: !input remote_device
     domain: mqtt
     type: action
-    subtype: "on"
+    subtype: "on-press"
     id: "on"
   - platform: device
     device_id: !input remote_device
     domain: mqtt
     type: action
-    subtype: "off"
+    subtype: "off-press"
     id: "dim_to_min"
   - platform: device
     device_id: !input remote_device
     domain: mqtt
     type: action
-    subtype: "up_press"
+    subtype: "up-press"
     id: "br_up"
   - platform: device
     device_id: !input remote_device
     domain: mqtt
     type: action
-    subtype: "down_press"
+    subtype: "down-press"
     id: "br_down"
   - platform: device
     device_id: !input remote_device
     domain: mqtt
     type: action
-    subtype: "hue"
+    subtype: "hue-press"
     id: "color_cycle"
 
 action:
   - choose:
-      # ON BUTTON: 100% Brightness
+      # ON BUTTON: Full Power
       - conditions: [{condition: trigger, id: "on"}]
         sequence:
           - action: light.turn_on
@@ -66,13 +67,13 @@ action:
             data:
               brightness_pct: 100
 
-      # OFF BUTTON: Dims to 10% (Does NOT turn off)
+      # OFF BUTTON: Dim to 5% (Nightlight mode)
       - conditions: [{condition: trigger, id: "dim_to_min"}]
         sequence:
           - action: light.turn_on
             target: !input light_entity
             data:
-              brightness_pct: 10
+              brightness_pct: 5
 
       # UP BUTTON: Increase Brightness
       - conditions: [{condition: trigger, id: "br_up"}]
@@ -90,10 +91,18 @@ action:
             data:
               brightness_step_pct: -{{ states(brightness_step) | int(10) }}
 
-      # HUE BUTTON: Cycle Warmth (Warmer with every click)
+      # HUE BUTTON: Change Color Temperature
+      # Cycles through Warm, Neutral, and Cold
       - conditions: [{condition: trigger, id: "color_cycle"}]
         sequence:
           - action: light.turn_on
             target: !input light_entity
             data:
-              color_temp_kelvin: 2700 # Sets it to a Warm White
+              color_temp_kelvin: >
+                {% if state_attr((!input light_entity).entity_id[0], 'color_temp_kelvin') > 3500 %}
+                  2700
+                {% elif state_attr((!input light_entity).entity_id[0], 'color_temp_kelvin') > 2800 %}
+                  4000
+                {% else %}
+                  3000
+                {% endif %}
