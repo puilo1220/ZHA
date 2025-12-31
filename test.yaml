@@ -1,11 +1,11 @@
 blueprint:
-  name: Styrbar Remote Control for Lights (Fixed)
-  description: Control IKEA Styrbar remote via Zigbee2MQTT.
+  name: Styrbar Remote Control for Lights (Flexible)
+  description: Control IKEA Styrbar remote. Device selection is unrestricted.
   domain: automation
   input:
     mqtt_device:
       name: Styrbar Remote Control
-      description: Select the Styrbar Remote device.
+      description: Select your Styrbar Remote from the list.
       selector:
         device: {}
     light_entity:
@@ -17,7 +17,6 @@ blueprint:
             domain: light
     brightness_step:
       name: Brightness Step
-      description: "Brightness adjustment step (1-100%)."
       default: 5
       selector:
         number:
@@ -27,7 +26,6 @@ blueprint:
           unit_of_measurement: "%"
     delay_ms:
       name: Delay (ms) Between Steps
-      description: "Delay between brightness steps."
       default: 300
       selector:
         number:
@@ -120,6 +118,6 @@ action:
                 - action: light.turn_on
                   target: !input light_entity
                   data:
-                    brightness_step_pct: -{{ states(brightness_step) | int }}
+                    brightness_step_pct: -{{ states(brightness_step) | int(5) }}
                     transition: !input transition_seconds
                 - delay: {milliseconds: !input delay_ms}
