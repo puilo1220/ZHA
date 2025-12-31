@@ -7,10 +7,7 @@ blueprint:
       name: Styrbar Remote Control
       description: Select the Styrbar Remote device.
       selector:
-        device:
-          integration: mqtt
-          manufacturer: IKEA
-          model: STYRBAR remote control (E2001/E2002)
+        device: {}
     light_entity:
       name: Light Entity
       description: The light to control.
