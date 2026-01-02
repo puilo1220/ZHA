@@ -1,12 +1,12 @@
 blueprint:
-  name: Styrbar (Smooth Dim & Fixed Color)
-  description: Fixes the brightness decrease issue and includes color temperature.
+  name: Styrbar (Smooth Dim, Color & Response Speed)
+  description: Adds transition time and stop-on-release for smooth control.
   domain: automation
   input:
     mqtt_device:
       name: Styrbar Remote Control
       selector:
-        device: {}
+        device: { integration: mqtt }
     light_entity:
       name: Light Entity
       selector:
@@ -21,10 +21,20 @@ blueprint:
           min: 1
           max: 50
           unit_of_measurement: "%"
+    transition_time:
+      name: Response Time (Transition)
+      description: How many seconds the light takes to reach the next level.
+      default: 0.5
+      selector:
+        number:
+          min: 0
+          max: 5
+          step: 0.1
+          unit_of_measurement: "s"
 
 variables:
-  # This converts the input to a variable so the math works every time
   step_value: !input brightness_step
+  trans_time: !input transition_time
   target_light: !input light_entity
 
 mode: restart
@@ -46,14 +56,20 @@ trigger:
     device_id: !input mqtt_device
     domain: mqtt
     type: action
+    subtype: brightness_move_up
+    id: dim_up
+  - platform: device
+    device_id: !input mqtt_device
+    domain: mqtt
+    type: action
     subtype: brightness_move_down
     id: dim_down
   - platform: device
     device_id: !input mqtt_device
     domain: mqtt
     type: action
-    subtype: brightness_move_up
-    id: dim_up
+    subtype: brightness_stop
+    id: stop_dimming
   - platform: device
     device_id: !input mqtt_device
     domain: mqtt
@@ -69,23 +85,20 @@ trigger:
 
 action:
   - choose:
-      # ON: 100%
+      # ON/OFF logic remains the same
       - conditions: [{condition: trigger, id: light_on}]
         sequence:
           - service: light.turn_on
             target: !input light_entity
-            data:
-              brightness_pct: 100
+            data: { brightness_pct: 100, transition: "{{ trans_time }}" }
 
-      # OFF: 10%
       - conditions: [{condition: trigger, id: light_dim_only}]
         sequence:
           - service: light.turn_on
             target: !input light_entity
-            data:
-              brightness_pct: 10
+            data: { brightness_pct: 10, transition: "{{ trans_time }}" }
 
-      # BRIGHTNESS UP (HOLD)
+      # BRIGHTNESS UP (With Transition)
       - conditions: [{condition: trigger, id: dim_up}]
         sequence:
           - repeat:
@@ -95,9 +108,10 @@ action:
                   target: !input light_entity
                   data:
                     brightness_step_pct: "{{ step_value | int }}"
-                - delay: {milliseconds: 300}
+                    transition: "{{ trans_time }}"
+                - delay: { milliseconds: 400 }
 
-      # BRIGHTNESS DOWN (HOLD) - FIXED MATH
+      # BRIGHTNESS DOWN (With Transition)
       - conditions: [{condition: trigger, id: dim_down}]
         sequence:
           - repeat:
@@ -106,26 +120,32 @@ action:
                 - service: light.turn_on
                   target: !input light_entity
                   data:
-                    # We multiply by -1 to ensure it's a negative decrease
                     brightness_step_pct: "{{ (step_value | int) * -1 }}"
-                - delay: {milliseconds: 300}
+                    transition: "{{ trans_time }}"
+                - delay: { milliseconds: 400 }
 
-      # COLOR WARMER
+      # STOP ACTION (Ends the repeat loop)
+      - conditions: [{condition: trigger, id: stop_dimming}]
+        sequence:
+          - stop: "Button released"
+
+      # COLOR logic (Transition makes this feel much smoother)
       - conditions: [{condition: trigger, id: color_warmer}]
         sequence:
           - service: light.turn_on
             target: !input light_entity
             data:
+              transition: "{{ trans_time }}"
               color_temp_kelvin: >
                 {% set entity = target_light.entity_id if target_light.entity_id is string else target_light.entity_id[0] %}
                 {{ (state_attr(entity, 'color_temp_kelvin') | default(3000, true)) - 500 }}
 
-      # COLOR COOLER
       - conditions: [{condition: trigger, id: color_cooler}]
         sequence:
           - service: light.turn_on
             target: !input light_entity
             data:
+              transition: "{{ trans_time }}"
               color_temp_kelvin: >
                 {% set entity = target_light.entity_id if target_light.entity_id is string else target_light.entity_id[0] %}
                 {{ (state_attr(entity, 'color_temp_kelvin') | default(3000, true)) + 500 }}
