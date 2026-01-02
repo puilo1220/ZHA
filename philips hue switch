@@ -1,6 +1,6 @@
 blueprint:
-  name: "Hue Dimmer v2 (Smooth Fix)"
-  description: "Select the Hue Dimmer v2 device. Includes smooth transitions and dim-to-off fix."
+  name: "Hue Dimmer v2 - Action Fix"
+  description: "Select the Hue Dimmer v2. Fixes the 'Unable to determine action' error."
   domain: automation
   input:
     remote_device:
@@ -32,74 +32,94 @@ blueprint:
           step: 0.1
           unit_of_measurement: "s"
 
-variables:
-  step_val: !input brightness_step
-  trans_val: !input transition_time
-  target_light: !input light_entity
-
 mode: restart
 
+# Using Trigger IDs is the most stable way to avoid 'Malformed' errors
 trigger:
-  # This listens for ANY action from the device and we sort it in the 'action' block
   - platform: device
     domain: mqtt
     device_id: !input remote_device
     type: action
+    subtype: on-press
+    id: "on"
+  - platform: device
+    domain: mqtt
+    device_id: !input remote_device
+    type: action
+    subtype: off-press
+    id: "off"
+  - platform: device
+    domain: mqtt
+    device_id: !input remote_device
+    type: action
+    subtype: up-press
+    id: "up"
+  - platform: device
+    domain: mqtt
+    device_id: !input remote_device
+    type: action
+    subtype: down-press
+    id: "down"
+  - platform: device
+    domain: mqtt
+    device_id: !input remote_device
+    type: action
+    subtype: hue-press
+    id: "hue"
 
 action:
-  - vars:
-      # This captures the button name whether it uses - or _
-      action: "{{ trigger.subtype }}"
   - choose:
       # ON BUTTON
-      - conditions: "{{ action in ['on', 'on-press', 'on_press'] }}"
+      - conditions:
+          - condition: trigger
+            id: "on"
         sequence:
           - service: light.turn_on
             target: !input light_entity
             data:
               brightness_pct: 100
-              transition: "{{ trans_val }}"
+              transition: !input transition_time
 
       # OFF BUTTON (Dim to 5%)
-      - conditions: "{{ action in ['off', 'off-press', 'off_press'] }}"
+      - conditions:
+          - condition: trigger
+            id: "off"
         sequence:
           - service: light.turn_on
             target: !input light_entity
             data:
               brightness_pct: 5
-              transition: "{{ trans_val }}"
+              transition: !input transition_time
 
       # UP BUTTON
-      - conditions: "{{ action in ['up-press', 'up_press', 'initial_press_up'] }}"
+      - conditions:
+          - condition: trigger
+            id: "up"
         sequence:
           - service: light.turn_on
             target: !input light_entity
             data:
-              brightness_step_pct: "{{ step_val | int }}"
-              transition: "{{ trans_val }}"
+              brightness_step_pct: !input brightness_step
+              transition: !input transition_time
 
       # DOWN BUTTON
-      - conditions: "{{ action in ['down-press', 'down_press', 'initial_press_down'] }}"
+      - conditions:
+          - condition: trigger
+            id: "down"
         sequence:
           - service: light.turn_on
             target: !input light_entity
             data:
-              brightness_step_pct: "{{ (step_val | int) * -1 }}"
-              transition: "{{ trans_val }}"
+              brightness_step_pct: -{{ states(brightness_step) | int(10) }}
+              transition: !input transition_time
 
-      # HUE BUTTON (Color Cycle)
-      - conditions: "{{ action in ['hue', 'hue-press', 'hue_press'] }}"
+      # HUE BUTTON
+      - conditions:
+          - condition: trigger
+            id: "hue"
         sequence:
           - service: light.turn_on
             target: !input light_entity
             data:
-              transition: "{{ trans_val }}"
-              color_temp_kelvin: >
-                {% set entity = target_light.entity_id if target_light.entity_id is string else target_light.entity_id[0] %}
-                {% if state_attr(entity, 'color_temp_kelvin') | default(3000, true) > 3500 %}
-                  2700
-                {% elif state_attr(entity, 'color_temp_kelvin') | default(3000, true) > 2800 %}
-                  4500
-                {% else %}
-                  3200
-                {% endif %}
+              color_temp_kelvin: 3000
+              transition: !input transition_time
