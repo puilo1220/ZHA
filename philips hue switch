@@ -132,9 +132,6 @@ action:
           # Call turn_on once to ensure the bulb is ready
           - service: light.turn_on
             target: !input light_entity
-          - delay: { milliseconds: 100 }
-          - service: light.turn_on
-            target: !input light_entity
             data:
               # Using the new 2026-standard attribute name
               color_temp_kelvin: >
