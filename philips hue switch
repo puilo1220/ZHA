@@ -129,12 +129,12 @@ action:
           - service: light.turn_on
             target: !input light_entity
             data:
-              transition: "{{ trans_time }}"
+              transition: !input transition_time
               color_temp_kelvin: >
                 {# 提取正確的 entity_id #}
                 {% set entity = target_light.entity_id if target_light.entity_id is string else target_light.entity_id[0] %}
-                {# 獲取當前數值並減去 500，設定最小值防止出錯 (例如最低 2000K) #}
+                {# 獲取當前數值並減去 500 #}
                 {% set current_temp = state_attr(entity, 'color_temp_kelvin') | default(3000, true) | int %}
                 {% set new_temp = current_temp - 500 %}
+                {# 設定最小值 2000K #}
                 {% if new_temp < 2000 %} 2000 {% else %} {{ new_temp }} {% endif %}
-                transition: !input transition_time
