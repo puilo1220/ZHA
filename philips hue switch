@@ -1,17 +1,6 @@
 blueprint:
-  name: "Hue Dimmer v2 - Action Fix"
-  description: "Select the Hue Dimmer v2. Fixes the 'Unable to determine action' error."
-  domain: automation
-  input:
-    remote_device:
-      name: Hue Dimmer Switch
-      selector:
-        device:
-          integration: mqtt
-    light_entity:
-      name: Light Entityblueprint:
-  name: "Hue Dimmer v2 - Toggle & Color Cycle"
-  description: "On toggles On/Off. Hue cycles 3000K/4500K. Fixes Down button math."
+  name: "Hue Dimmer v2 - Toggle & Fix"
+  description: "On toggles, Hue cycles, Down button fixed."
   domain: automation
   input:
     remote_device:
@@ -43,7 +32,6 @@ blueprint:
           step: 0.1
           unit_of_measurement: "s"
 
-# We create variables here so the templates can use them safely
 variables:
   target_light: !input light_entity
   step_size: !input brightness_step
@@ -57,136 +45,6 @@ trigger:
     type: action
     subtype: on_press
     id: "on_toggle"
-  - platform: device
-    domain: mqtt
-    device_id: !input remote_device
-    type: action
-    subtype: off_press
-    id: "dim_to_min"
-  - platform: device
-    domain: mqtt
-    device_id: !input remote_device
-    type: action
-    subtype: up_press
-    id: "up"
-  - platform: device
-    domain: mqtt
-    device_id: !input remote_device
-    type: action
-    subtype: down_press
-    id: "down"
-  - platform: device
-    domain: mqtt
-    device_id: !input remote_device
-    type: action
-    subtype: hue_press
-    id: "hue_cycle"
-
-action:
-  - choose:
-      # ON BUTTON: Toggle Logic
-      - conditions:
-          - condition: trigger
-            id: "on_toggle"
-        sequence:
-          - if:
-              - condition: template
-                # Check if the light is already on
-                value_template: >
-                  {% set entity = target_light.entity_id if target_light.entity_id is string else target_light.entity_id[0] %}
-                  {{ is_state(entity, 'on') }}
-            then:
-              - service: light.turn_off
-                target: !input light_entity
-            else:
-              - service: light.turn_on
-                target: !input light_entity
-                data:
-                  brightness_pct: 100
-                  transition: !input transition_time
-
-      # OFF BUTTON: Dims to 5% (As requested before)
-      - conditions:
-          - condition: trigger
-            id: "dim_to_min"
-        sequence:
-          - service: light.turn_on
-            target: !input light_entity
-            data:
-              brightness_pct: 5
-              transition: !input transition_time
-
-      # UP BUTTON
-      - conditions:
-          - condition: trigger
-            id: "up"
-        sequence:
-          - service: light.turn_on
-            target: !input light_entity
-            data:
-              brightness_step_pct: !input brightness_step
-              transition: !input transition_time
-
-      # DOWN BUTTON: Fixed Math
-      - conditions:
-          - condition: trigger
-            id: "down"
-        sequence:
-          - service: light.turn_on
-            target: !input light_entity
-            data:
-              # Using the fixed math that worked for Styrbar
-              brightness_step_pct: "{{ (step_size | int) * -1 }}"
-              transition: !input transition_time
-
-      # HUE BUTTON: Temperature Cycle (3000K <-> 4500K)
-      - conditions:
-          - condition: trigger
-            id: "hue_cycle"
-        sequence:
-          - service: light.turn_on
-            target: !input light_entity
-            data:
-              transition: !input transition_time
-              color_temp_kelvin: >
-                {% set entity = target_light.entity_id if target_light.entity_id is string else target_light.entity_id[0] %}
-                {% if state_attr(entity, 'color_temp_kelvin') | int(3000) > 3500 %}
-                  3000
-                {% else %}
-                  4500
-                {% endif %}
-      selector:
-        target:
-          entity:
-            domain: light
-    brightness_step:
-      name: Brightness Step
-      default: 10
-      selector:
-        number:
-          min: 1
-          max: 50
-          unit_of_measurement: "%"
-    transition_time:
-      name: Response Time
-      default: 0.5
-      selector:
-        number:
-          min: 0
-          max: 2
-          step: 0.1
-          unit_of_measurement: "s"
-
-mode: restart
-
-# Using Trigger IDs is the most stable way to avoid 'Malformed' errors
-trigger:
-  - platform: device
-    domain: mqtt
-    device_id: !input remote_device
-    type: action
-    subtype: on_press
-    id: "on"
   - platform: device
     domain: mqtt
     device_id: !input remote_device
@@ -210,22 +68,29 @@ trigger:
     device_id: !input remote_device
     type: action
     subtype: hue_press
-    id: "hue"
+    id: "hue_cycle"
 
 action:
   - choose:
-      # ON BUTTON
       - conditions:
           - condition: trigger
-            id: "on"
+            id: "on_toggle"
         sequence:
-          - service: light.turn_on
-            target: !input light_entity
-            data:
-              brightness_pct: 100
-              transition: !input transition_time
+          - if:
+              - condition: template
+                value_template: >
+                  {% set entity = target_light.entity_id if target_light.entity_id is string else target_light.entity_id[0] %}
+                  {{ is_state(entity, 'on') }}
+            then:
+              - service: light.turn_off
+                target: !input light_entity
+            else:
+              - service: light.turn_on
+                target: !input light_entity
+                data:
+                  brightness_pct: 100
+                  transition: !input transition_time
 
-      # OFF BUTTON (Dim to 5%)
       - conditions:
           - condition: trigger
             id: "off"
@@ -236,7 +101,6 @@ action:
               brightness_pct: 5
               transition: !input transition_time
 
-      # UP BUTTON
       - conditions:
           - condition: trigger
             id: "up"
@@ -247,7 +111,6 @@ action:
               brightness_step_pct: !input brightness_step
               transition: !input transition_time
 
-      # DOWN BUTTON
       - conditions:
           - condition: trigger
             id: "down"
@@ -255,16 +118,21 @@ action:
           - service: light.turn_on
             target: !input light_entity
             data:
-              brightness_step_pct: -{{ states(brightness_step) | int(10) }}
+              brightness_step_pct: "{{ (step_size | int) * -1 }}"
               transition: !input transition_time
 
-      # HUE BUTTON
       - conditions:
           - condition: trigger
-            id: "hue"
+            id: "hue_cycle"
         sequence:
           - service: light.turn_on
             target: !input light_entity
             data:
-              color_temp_kelvin: 3000
               transition: !input transition_time
+              color_temp_kelvin: >
+                {% set entity = target_light.entity_id if target_light.entity_id is string else target_light.entity_id[0] %}
+                {% if state_attr(entity, 'color_temp_kelvin') | int(3000) > 3500 %}
+                  3000
+                {% else %}
+                  4500
+                {% endif %}
