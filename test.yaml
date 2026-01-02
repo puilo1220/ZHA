@@ -1,6 +1,6 @@
 blueprint:
-  name: Styrbar Remote Control (Custom Dim & Color)
-  description: Control IKEA Styrbar. Off button dims instead of turning off. Arrows change color warmth.
+  name: Styrbar Remote (Smooth Dim & Color Fix)
+  description: Controlled dimming speed and fixed color temperature logic.
   domain: automation
   input:
     mqtt_device:
@@ -15,22 +15,28 @@ blueprint:
             domain: light
     brightness_step:
       name: Brightness Step
-      default: 10
+      default: 5
       selector:
         number:
           min: 1
-          max: 100
+          max: 20
           unit_of_measurement: "%"
-    color_step:
-      name: Color Temperature Step
+    dim_speed:
+      name: Dimming Delay
+      description: Increase this to slow down the dimming (ms).
       default: 500
       selector:
         number:
           min: 100
-          max: 2000
-          unit_of_measurement: "K"
+          max: 1000
+          step: 50
+          unit_of_measurement: "ms"
 
 mode: restart
+
+# This helper helps the template find the right light ID
+variables:
+  target_light: !input light_entity
 
 trigger:
   - platform: device
@@ -72,18 +78,18 @@ trigger:
 
 action:
   - choose:
-      # ON BUTTON: Full Brightness
+      # ON: Full
       - conditions: [{condition: trigger, id: light_on}]
         sequence:
-          - action: light.turn_on
+          - service: light.turn_on
             target: !input light_entity
             data:
               brightness_pct: 100
 
-      # OFF BUTTON: Set to 10% instead of Off
+      # OFF: Dim to 10%
       - conditions: [{condition: trigger, id: light_dim_only}]
         sequence:
-          - action: light.turn_on
+          - service: light.turn_on
             target: !input light_entity
             data:
               brightness_pct: 10
@@ -94,11 +100,12 @@ action:
           - repeat:
               while: [{condition: trigger, id: dim_up}]
               sequence:
-                - action: light.turn_on
+                - service: light.turn_on
                   target: !input light_entity
                   data:
                     brightness_step_pct: !input brightness_step
-                - delay: {milliseconds: 300}
+                    transition: 0.4
+                - delay: {milliseconds: !input dim_speed}
 
       # BRIGHTNESS DOWN (HOLD)
       - conditions: [{condition: trigger, id: dim_down}]
@@ -106,24 +113,30 @@ action:
           - repeat:
               while: [{condition: trigger, id: dim_down}]
               sequence:
-                - action: light.turn_on
+                - service: light.turn_on
                   target: !input light_entity
                   data:
-                    brightness_step_pct: -10
-                - delay: {milliseconds: 300}
+                    brightness_step_pct: -{{ states(brightness_step) | int(5) }}
+                    transition: 0.4
+                - delay: {milliseconds: !input dim_speed}
 
-      # LEFT ARROW: Warmer (Lower Kelvin)
+      # COLOR WARMER
       - conditions: [{condition: trigger, id: color_warmer}]
         sequence:
-          - action: light.turn_on
+          - service: light.turn_on
             target: !input light_entity
             data:
-              color_temp_kelvin: "{{ (state_attr(device_entities(device_id( 'mqtt_device' ))[0], 'color_temp_kelvin') | default(3000, true)) - 500 }}"
+              # This finds the current color of the BULB directly
+              color_temp_kelvin: >
+                {% set entity = target_light.entity_id if target_light.entity_id is string else target_light.entity_id[0] %}
+                {{ (state_attr(entity, 'color_temp_kelvin') | default(3000, true)) - 400 }}
 
-      # RIGHT ARROW: Cooler (Higher Kelvin)
+      # COLOR COOLER
       - conditions: [{condition: trigger, id: color_cooler}]
         sequence:
-          - action: light.turn_on
+          - service: light.turn_on
             target: !input light_entity
             data:
-              color_temp_kelvin: "{{ (state_attr(device_entities(device_id( 'mqtt_device' ))[0], 'color_temp_kelvin') | default(3000, true)) + 500 }}"
+              color_temp_kelvin: >
+                {% set entity = target_light.entity_id if target_light.entity_id is string else target_light.entity_id[0] %}
+                {{ (state_attr(entity, 'color_temp_kelvin') | default(3000, true)) + 400 }}
