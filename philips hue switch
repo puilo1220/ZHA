@@ -121,18 +121,26 @@ action:
               brightness_step_pct: "{{ (step_size | int) * -1 }}"
               transition: !input transition_time
 
+# HUE BUTTON: Color Temperature Cycle (3000K <-> 4500K)
       - conditions:
           - condition: trigger
             id: "hue_cycle"
         sequence:
+          - variables:
+              # Identify the entity for state checking
+              entity: "{{ target_light.entity_id if target_light.entity_id is string else target_light.entity_id[0] }}"
+          # Call turn_on once to ensure the bulb is ready
+          - service: light.turn_on
+            target: !input light_entity
+          - delay: { milliseconds: 100 }
           - service: light.turn_on
             target: !input light_entity
             data:
-              transition: !input transition_time
+              # Using the new 2026-standard attribute name
               color_temp_kelvin: >
-                {% set entity = target_light.entity_id if target_light.entity_id is string else target_light.entity_id[0] %}
-                {% if state_attr(entity, 'color_temp_kelvin') | int(3000) > 3500 %}
-                  3000
+                {% if state_attr(entity, 'color_temp_kelvin') | int(0) > 3500 %}
+                  2700
                 {% else %}
                   4500
                 {% endif %}
+              transition: !input transition_time
