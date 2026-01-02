@@ -121,21 +121,29 @@ action:
               brightness_step_pct: "{{ (step_size | int) * -1 }}"
               transition: !input transition_time
 
-# HUE BUTTON: Color Temperature Cycle (3000K <-> 4500K)
+# HUE BUTTON: Color Temperature Cycle (修復版)
       - conditions:
           - condition: trigger
-            id: "hue_cycle"
+            id: "hue"
         sequence:
           - variables:
-              # Identify the entity for state checking
-              entity: "{{ target_light.entity_id if target_light.entity_id is string else target_light.entity_id[0] }}"
-          # Call turn_on once to ensure the bulb is ready
+              # 強制將 target 轉做單一 entity_id 字串
+              target_entity: >
+                {% if light_entity.entity_id is string %}
+                  {{ light_entity.entity_id }}
+                {% else %}
+                  {{ light_entity.entity_id[0] }}
+                {% endif %}
+              
+              # 獲取當前色溫，如果攞唔到就預設 3000
+              current_temp: "{{ state_attr(target_entity, 'color_temp_kelvin') | int(3000) }}"
+
           - service: light.turn_on
             target: !input light_entity
             data:
-              # Using the new 2026-standard attribute name
+              # 邏輯：如果大過 3500 (白光)，就變 2700 (黃光)；否則就變 4500 (白光)
               color_temp_kelvin: >
-                {% if state_attr(entity, 'color_temp_kelvin') | int(0) > 3500 %}
+                {% if current_temp > 3500 %}
                   2700
                 {% else %}
                   4500
