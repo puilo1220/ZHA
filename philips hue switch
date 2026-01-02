@@ -40,31 +40,31 @@ trigger:
     domain: mqtt
     device_id: !input remote_device
     type: action
-    subtype: on-press
+    subtype: on_press
     id: "on"
   - platform: device
     domain: mqtt
     device_id: !input remote_device
     type: action
-    subtype: off-press
+    subtype: off_press
     id: "off"
   - platform: device
     domain: mqtt
     device_id: !input remote_device
     type: action
-    subtype: up-press
+    subtype: up_press
     id: "up"
   - platform: device
     domain: mqtt
     device_id: !input remote_device
     type: action
-    subtype: down-press
+    subtype: down_press
     id: "down"
   - platform: device
     domain: mqtt
     device_id: !input remote_device
     type: action
-    subtype: hue-press
+    subtype: hue_press
     id: "hue"
 
 action:
