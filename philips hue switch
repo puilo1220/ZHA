@@ -121,31 +121,20 @@ action:
               brightness_step_pct: "{{ (step_size | int) * -1 }}"
               transition: !input transition_time
 
-# HUE BUTTON: Color Temperature Cycle (修復版)
+# HUE BUTTON: 每次撳減少 500K (變暖)
       - conditions:
           - condition: trigger
-            id: "hue"
+            id: "hue_cycle"
         sequence:
-          - variables:
-              # 強制將 target 轉做單一 entity_id 字串
-              target_entity: >
-                {% if light_entity.entity_id is string %}
-                  {{ light_entity.entity_id }}
-                {% else %}
-                  {{ light_entity.entity_id[0] }}
-                {% endif %}
-              
-              # 獲取當前色溫，如果攞唔到就預設 3000
-              current_temp: "{{ state_attr(target_entity, 'color_temp_kelvin') | int(3000) }}"
-
           - service: light.turn_on
             target: !input light_entity
             data:
-              # 邏輯：如果大過 3500 (白光)，就變 2700 (黃光)；否則就變 4500 (白光)
+              transition: "{{ trans_time }}"
               color_temp_kelvin: >
-                {% if current_temp > 3500 %}
-                  2700
-                {% else %}
-                  4500
-                {% endif %}
-              transition: !input transition_time
+                {# 提取正確的 entity_id #}
+                {% set entity = target_light.entity_id if target_light.entity_id is string else target_light.entity_id[0] %}
+                {# 獲取當前數值並減去 500，設定最小值防止出錯 (例如最低 2000K) #}
+                {% set current_temp = state_attr(entity, 'color_temp_kelvin') | default(3000, true) | int %}
+                {% set new_temp = current_temp - 500 %}
+                {% if new_temp < 2000 %} 2000 {% else %} {{ new_temp }} {% endif %}
+                transition: !input transition_time
