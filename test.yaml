@@ -96,7 +96,7 @@ action:
         sequence:
           - service: light.turn_on
             target: !input light_entity
-            data: { brightness_pct: 10, transition: "{{ trans_time }}" }
+            data: { brightness_pct: 0, transition: "{{ trans_time }}" }
 
       # BRIGHTNESS UP (With Transition)
       - conditions: [{condition: trigger, id: dim_up}]
