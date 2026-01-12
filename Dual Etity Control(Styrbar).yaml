@@ -1,26 +1,26 @@
 blueprint:
-  name: Styrbar Dual-Entity Dimmer (MQTT)
-  description: Use Top/Bottom for Light A and Left/Right for Light B.
+  name: Styrbar Dual-Entity (Click for Max/Off, Hold to Dim)
+  description: 上下鍵控制燈 A，左右鍵控制燈 B。短按全開/關，長按平滑調光。
   domain: automation
   input:
     mqtt_device:
       name: Styrbar Remote Control
       selector:
         device: { integration: mqtt }
-    primary_light:
-      name: Primary Light (Top/Bottom)
+    light_a:
+      name: 燈具 A (上下鍵)
       selector:
         target:
           entity:
             domain: light
-    secondary_light:
-      name: Secondary Light (Left/Right)
+    light_b:
+      name: 燈具 B (左右鍵)
       selector:
         target:
           entity:
             domain: light
     brightness_step:
-      name: Brightness Step
+      name: 調光步進值
       default: 10
       selector:
         number:
@@ -28,7 +28,7 @@ blueprint:
           max: 50
           unit_of_measurement: "%"
     transition_time:
-      name: Response Time (Transition)
+      name: 漸變時間
       default: 0.5
       selector:
         number:
@@ -38,112 +38,151 @@ blueprint:
           unit_of_measurement: "s"
 
 variables:
-  step_value: !input brightness_step
+  step_val: !input brightness_step
   trans_time: !input transition_time
 
 mode: restart
 
 trigger:
+  # 燈具 A 觸發
   - platform: device
     device_id: !input mqtt_device
     domain: mqtt
     type: action
     subtype: "on"
-    id: primary_on
+    id: a_max
   - platform: device
     device_id: !input mqtt_device
     domain: mqtt
     type: action
     subtype: "off"
-    id: primary_off
+    id: a_off
   - platform: device
     device_id: !input mqtt_device
     domain: mqtt
     type: action
     subtype: brightness_move_up
-    id: primary_up
+    id: a_up_hold
   - platform: device
     device_id: !input mqtt_device
     domain: mqtt
     type: action
     subtype: brightness_move_down
-    id: primary_down
-  - platform: device
-    device_id: !input mqtt_device
-    domain: mqtt
-    type: action
-    subtype: arrow_left_click
-    id: secondary_down
+    id: a_down_hold
+  # 燈具 B 觸發 (左右鍵)
   - platform: device
     device_id: !input mqtt_device
     domain: mqtt
     type: action
     subtype: arrow_right_click
-    id: secondary_up
+    id: b_max
+  - platform: device
+    device_id: !input mqtt_device
+    domain: mqtt
+    type: action
+    subtype: arrow_left_click
+    id: b_off
+  - platform: device
+    device_id: !input mqtt_device
+    domain: mqtt
+    type: action
+    subtype: arrow_right_hold
+    id: b_up_hold
+  - platform: device
+    device_id: !input mqtt_device
+    domain: mqtt
+    type: action
+    subtype: arrow_left_hold
+    id: b_down_hold
+  # 停止信號
   - platform: device
     device_id: !input mqtt_device
     domain: mqtt
     type: action
     subtype: brightness_stop
-    id: stop_action
+    id: stop
+  - platform: device
+    device_id: !input mqtt_device
+    domain: mqtt
+    type: action
+    subtype: arrow_right_release
+    id: stop
+  - platform: device
+    device_id: !input mqtt_device
+    domain: mqtt
+    type: action
+    subtype: arrow_left_release
+    id: stop
 
 action:
   - choose:
-      # PRIMARY LIGHT LOGIC
-      - conditions: [{condition: trigger, id: primary_on}]
+      # --- 燈具 A 邏輯 ---
+      - conditions: [{condition: trigger, id: a_max}]
         sequence:
           - service: light.turn_on
-            target: !input primary_light
+            target: !input light_a
             data: { brightness_pct: 100, transition: "{{ trans_time }}" }
-
-      - conditions: [{condition: trigger, id: primary_off}]
+      
+      - conditions: [{condition: trigger, id: a_off}]
         sequence:
           - service: light.turn_off
-            target: !input primary_light
+            target: !input light_a
             data: { transition: "{{ trans_time }}" }
 
-      - conditions: [{condition: trigger, id: primary_up}]
+      - conditions: [{condition: trigger, id: a_up_hold}]
         sequence:
           - repeat:
-              while: [{condition: trigger, id: primary_up}]
+              while: [{condition: trigger, id: a_up_hold}]
               sequence:
                 - service: light.turn_on
-                  target: !input primary_light
-                  data:
-                    brightness_step_pct: "{{ step_value }}"
-                    transition: "{{ trans_time }}"
+                  target: !input light_a
+                  data: { brightness_step_pct: "{{ step_val }}", transition: "{{ trans_time }}" }
                 - delay: { milliseconds: 400 }
 
-      - conditions: [{condition: trigger, id: primary_down}]
+      - conditions: [{condition: trigger, id: a_down_hold}]
         sequence:
           - repeat:
-              while: [{condition: trigger, id: primary_down}]
+              while: [{condition: trigger, id: a_down_hold}]
               sequence:
                 - service: light.turn_on
-                  target: !input primary_light
-                  data:
-                    brightness_step_pct: "{{ (step_value | int) * -1 }}"
-                    transition: "{{ trans_time }}"
+                  target: !input light_a
+                  data: { brightness_step_pct: "{{ (step_val | int) * -1 }}", transition: "{{ trans_time }}" }
                 - delay: { milliseconds: 400 }
 
-      # SECONDARY LIGHT LOGIC (Left/Right)
-      - conditions: [{condition: trigger, id: secondary_up}]
+      # --- 燈具 B 邏輯 ---
+      - conditions: [{condition: trigger, id: b_max}]
         sequence:
           - service: light.turn_on
-            target: !input secondary_light
-            data:
-              brightness_step_pct: "{{ step_value }}"
-              transition: "{{ trans_time }}"
+            target: !input light_b
+            data: { brightness_pct: 100, transition: "{{ trans_time }}" }
 
-      - conditions: [{condition: trigger, id: secondary_down}]
+      - conditions: [{condition: trigger, id: b_off}]
         sequence:
-          - service: light.turn_on
-            target: !input secondary_light
-            data:
-              brightness_step_pct: "{{ (step_value | int) * -1 }}"
-              transition: "{{ trans_time }}"
+          - service: light.turn_off
+            target: !input light_b
+            data: { transition: "{{ trans_time }}" }
 
-      # STOP ACTION
-      - conditions: [{condition: trigger, id: stop_action}]
+      - conditions: [{condition: trigger, id: b_up_hold}]
         sequence:
-          - stop: "Release detected"
+          - repeat:
+              while: [{condition: trigger, id: b_up_hold}]
+              sequence:
+                - service: light.turn_on
+                  target: !input light_b
+                  data: { brightness_step_pct: "{{ step_val }}", transition: "{{ trans_time }}" }
+                - delay: { milliseconds: 400 }
+
+      - conditions: [{condition: trigger, id: b_down_hold}]
+        sequence:
+          - repeat:
+              while: [{condition: trigger, id: b_down_hold}]
+              sequence:
+                - service: light.turn_on
+                  target: !input light_b
+                  data: { brightness_step_pct: "{{ (step_val | int) * -1 }}", transition: "{{ trans_time }}" }
+                - delay: { milliseconds: 400 }
+
+      # --- 停止 ---
+      - conditions: [{condition: trigger, id: stop}]
+        sequence:
+          - stop: "Released"
