@@ -1,0 +1,149 @@
+blueprint:
+  name: Styrbar Dual-Entity Dimmer (MQTT)
+  description: Use Top/Bottom for Light A and Left/Right for Light B.
+  domain: automation
+  input:
+    mqtt_device:
+      name: Styrbar Remote Control
+      selector:
+        device: { integration: mqtt }
+    primary_light:
+      name: Primary Light (Top/Bottom)
+      selector:
+        target:
+          entity:
+            domain: light
+    secondary_light:
+      name: Secondary Light (Left/Right)
+      selector:
+        target:
+          entity:
+            domain: light
+    brightness_step:
+      name: Brightness Step
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+          unit_of_measurement: "%"
+    transition_time:
+      name: Response Time (Transition)
+      default: 0.5
+      selector:
+        number:
+          min: 0
+          max: 5
+          step: 0.1
+          unit_of_measurement: "s"
+
+variables:
+  step_value: !input brightness_step
+  trans_time: !input transition_time
+
+mode: restart
+
+trigger:
+  - platform: device
+    device_id: !input mqtt_device
+    domain: mqtt
+    type: action
+    subtype: "on"
+    id: primary_on
+  - platform: device
+    device_id: !input mqtt_device
+    domain: mqtt
+    type: action
+    subtype: "off"
+    id: primary_off
+  - platform: device
+    device_id: !input mqtt_device
+    domain: mqtt
+    type: action
+    subtype: brightness_move_up
+    id: primary_up
+  - platform: device
+    device_id: !input mqtt_device
+    domain: mqtt
+    type: action
+    subtype: brightness_move_down
+    id: primary_down
+  - platform: device
+    device_id: !input mqtt_device
+    domain: mqtt
+    type: action
+    subtype: arrow_left_click
+    id: secondary_down
+  - platform: device
+    device_id: !input mqtt_device
+    domain: mqtt
+    type: action
+    subtype: arrow_right_click
+    id: secondary_up
+  - platform: device
+    device_id: !input mqtt_device
+    domain: mqtt
+    type: action
+    subtype: brightness_stop
+    id: stop_action
+
+action:
+  - choose:
+      # PRIMARY LIGHT LOGIC
+      - conditions: [{condition: trigger, id: primary_on}]
+        sequence:
+          - service: light.turn_on
+            target: !input primary_light
+            data: { brightness_pct: 100, transition: "{{ trans_time }}" }
+
+      - conditions: [{condition: trigger, id: primary_off}]
+        sequence:
+          - service: light.turn_off
+            target: !input primary_light
+            data: { transition: "{{ trans_time }}" }
+
+      - conditions: [{condition: trigger, id: primary_up}]
+        sequence:
+          - repeat:
+              while: [{condition: trigger, id: primary_up}]
+              sequence:
+                - service: light.turn_on
+                  target: !input primary_light
+                  data:
+                    brightness_step_pct: "{{ step_value }}"
+                    transition: "{{ trans_time }}"
+                - delay: { milliseconds: 400 }
+
+      - conditions: [{condition: trigger, id: primary_down}]
+        sequence:
+          - repeat:
+              while: [{condition: trigger, id: primary_down}]
+              sequence:
+                - service: light.turn_on
+                  target: !input primary_light
+                  data:
+                    brightness_step_pct: "{{ (step_value | int) * -1 }}"
+                    transition: "{{ trans_time }}"
+                - delay: { milliseconds: 400 }
+
+      # SECONDARY LIGHT LOGIC (Left/Right)
+      - conditions: [{condition: trigger, id: secondary_up}]
+        sequence:
+          - service: light.turn_on
+            target: !input secondary_light
+            data:
+              brightness_step_pct: "{{ step_value }}"
+              transition: "{{ trans_time }}"
+
+      - conditions: [{condition: trigger, id: secondary_down}]
+        sequence:
+          - service: light.turn_on
+            target: !input secondary_light
+            data:
+              brightness_step_pct: "{{ (step_value | int) * -1 }}"
+              transition: "{{ trans_time }}"
+
+      # STOP ACTION
+      - conditions: [{condition: trigger, id: stop_action}]
+        sequence:
+          - stop: "Release detected"
