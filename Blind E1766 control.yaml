@@ -1,16 +1,15 @@
 blueprint:
-  name: "IKEA E1766 - Dual Blind Control"
-  description: "Control two blinds (left and right) using the IKEA open/close remote."
+  name: "IKEA E1766 - Dual Blind Control (Zigbee2MQTT)"
+  description: "Control two blinds using the IKEA E1766 remote via Zigbee2MQTT."
   domain: automation
   input:
     remote:
       name: Remote
-      description: IKEA E1766 remote to use
+      description: Select your E1766 remote device.
       selector:
         device:
-          integration: zha
-          manufacturer: IKEA of Sweden
-          model: TRADFRI open/close remote
+          integration: mqtt
+          manufacturer: IKEA
     blind_left:
       name: Left Blind
       selector:
@@ -27,16 +26,16 @@ max_exceeded: silent
 
 trigger:
   - platform: device
-    domain: mqtt # Change to 'zha' or 'zigbee2mqtt' based on your integration
+    domain: mqtt
     device_id: !input remote
     type: action
-    subtype: "open" # Up Button
+    subtype: "open"
     id: "up"
   - platform: device
     domain: mqtt
     device_id: !input remote
     type: action
-    subtype: "close" # Down Button
+    subtype: "close"
     id: "down"
 
 action:
