@@ -28,9 +28,7 @@ blueprint:
       default:
         seconds: 10
       selector:
-        duration:
-          min: "00:00:05"
-          max: "00:05:00"
+        duration: {}
 
 trigger:
   - platform: time
