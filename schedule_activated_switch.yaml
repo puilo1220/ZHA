@@ -1,88 +1,48 @@
 blueprint:
-  name: Daily On/Off Timer for Switch (IKEA Plug)
+  name: Daily Modem Reset (Turn Off then On after delay)
   description: |
-    Turn any switch (IKEA smart plug, etc.) ON at one time and OFF at another time every day.
-    You can change the times directly when creating the automation.
-    Automatically sets the correct state after Home Assistant restarts.
-    Works with schedules that cross midnight.
+    Reset a modem/router every day at a chosen time.
+    Turns the smart plug OFF, waits a few seconds, then turns it back ON.
+    Perfect for daily modem reboot using your IKEA smart plug.
   domain: automation
 
   input:
     switch_entity:
-      name: IKEA Smart Plug (Switch Entity)
+      name: Smart Plug (IKEA Plug)
       description: |
-        Select your IKEA smart plug here.
-        IMPORTANT: This must be a SWITCH entity (not a device).
-        Search for "ikea" or the name of your plug.
-        
-        If you can't see it:
-        1. Go to Developer Tools → States
-        2. Search for "ikea" or your plug name
-        3. Copy the entity_id that starts with "switch."
-        Then come back and paste it or select it here.
+        Select your IKEA smart plug that powers the modem.
+        Search for "ikea" or go to Developer Tools → States to find the switch entity.
       selector:
         entity:
           domain: switch
 
-    on_time:
-      name: Turn ON Time
-      description: Time to turn the plug ON every day (e.g. 07:00)
+    reset_time:
+      name: Reset Time
+      description: Time to reset the modem every day (e.g. 03:00)
       selector:
         time: {}
 
-    off_time:
-      name: Turn OFF Time
-      description: Time to turn the plug OFF every day (e.g. 23:00)
+    off_duration:
+      name: How long to keep OFF
+      description: How many seconds the plug stays OFF before turning back ON (recommended 10-30 seconds)
+      default:
+        seconds: 10
       selector:
-        time: {}
-
-variables:
-  on_t: !input on_time
-  off_t: !input off_time
+        duration:
+          min: "00:00:05"
+          max: "00:05:00"
 
 trigger:
   - platform: time
-    at: !input on_time
-    id: turn_on
-  - platform: time
-    at: !input off_time
-    id: turn_off
-  - platform: homeassistant
-    event: start
-    id: startup
+    at: !input reset_time
 
 action:
-  - choose:
-      - conditions:
-          - condition: trigger
-            id: turn_on
-        sequence:
-          - service: switch.turn_on
-            target:
-              entity_id: !input switch_entity
-
-      - conditions:
-          - condition: trigger
-            id: turn_off
-        sequence:
-          - service: switch.turn_off
-            target:
-              entity_id: !input switch_entity
-
-      - conditions:
-          - condition: trigger
-            id: startup
-        sequence:
-          - variables:
-              current_time: "{{ now().strftime('%H:%M:%S') }}"
-              should_be_on: >
-                {% if on_t < off_t %}
-                  {{ current_time >= on_t and current_time < off_t }}
-                {% else %}
-                  {{ current_time >= on_t or current_time < off_t }}
-                {% endif %}
-          - service: "switch.turn_{{ 'on' if should_be_on else 'off' }}"
-            target:
-              entity_id: !input switch_entity
+  - service: switch.turn_off
+    target:
+      entity_id: !input switch_entity
+  - delay: !input off_duration
+  - service: switch.turn_on
+    target:
+      entity_id: !input switch_entity
 
 mode: single
