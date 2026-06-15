@@ -1,38 +1,88 @@
 blueprint:
-  name: Schedule-activated Switch (with restart sync)
+  name: Daily On/Off Timer for Switch (IKEA Plug)
   description: |
-    Turns a switch ON/OFF based on a Schedule Helper.
-    Also syncs the state when Home Assistant restarts (very useful for smart plugs).
-    Perfect for IKEA smart plugs and daily schedules.
+    Turn any switch (IKEA smart plug, etc.) ON at one time and OFF at another time every day.
+    You can change the times directly when creating the automation.
+    Automatically sets the correct state after Home Assistant restarts.
+    Works with schedules that cross midnight.
   domain: automation
+
   input:
-    schedule_entity:
-      name: Schedule
-      description: The Schedule Helper you created
+    switch_entity:
+      name: IKEA Smart Plug (Switch Entity)
+      description: |
+        Select your IKEA smart plug here.
+        IMPORTANT: This must be a SWITCH entity (not a device).
+        Search for "ikea" or the name of your plug.
+        
+        If you can't see it:
+        1. Go to Developer Tools → States
+        2. Search for "ikea" or your plug name
+        3. Copy the entity_id that starts with "switch."
+        Then come back and paste it or select it here.
       selector:
         entity:
-          domain: schedule
-    switch_target:
-      name: Switch / Smart Plug
-      description: Your IKEA smart plug (or any switch entity)
-      selector:
-        target:
-          entity:
-            domain: switch
+          domain: switch
 
-mode: single
+    on_time:
+      name: Turn ON Time
+      description: Time to turn the plug ON every day (e.g. 07:00)
+      selector:
+        time: {}
+
+    off_time:
+      name: Turn OFF Time
+      description: Time to turn the plug OFF every day (e.g. 23:00)
+      selector:
+        time: {}
 
 variables:
-  schedule_input: !input schedule_entity
+  on_t: !input on_time
+  off_t: !input off_time
 
 trigger:
-  - platform: state
-    entity_id: !input schedule_entity
-    id: schedule_changed
+  - platform: time
+    at: !input on_time
+    id: turn_on
+  - platform: time
+    at: !input off_time
+    id: turn_off
   - platform: homeassistant
     event: start
-    id: ha_restarted
+    id: startup
 
 action:
-  - service: "homeassistant.turn_{{ states(schedule_input) }}"
-    target: !input switch_target
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: turn_on
+        sequence:
+          - service: switch.turn_on
+            target:
+              entity_id: !input switch_entity
+
+      - conditions:
+          - condition: trigger
+            id: turn_off
+        sequence:
+          - service: switch.turn_off
+            target:
+              entity_id: !input switch_entity
+
+      - conditions:
+          - condition: trigger
+            id: startup
+        sequence:
+          - variables:
+              current_time: "{{ now().strftime('%H:%M:%S') }}"
+              should_be_on: >
+                {% if on_t < off_t %}
+                  {{ current_time >= on_t and current_time < off_t }}
+                {% else %}
+                  {{ current_time >= on_t or current_time < off_t }}
+                {% endif %}
+          - service: "switch.turn_{{ 'on' if should_be_on else 'off' }}"
+            target:
+              entity_id: !input switch_entity
+
+mode: single
