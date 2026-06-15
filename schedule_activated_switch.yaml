@@ -1,0 +1,38 @@
+blueprint:
+  name: Schedule-activated Switch (with restart sync)
+  description: |
+    Turns a switch ON/OFF based on a Schedule Helper.
+    Also syncs the state when Home Assistant restarts (very useful for smart plugs).
+    Perfect for IKEA smart plugs and daily schedules.
+  domain: automation
+  input:
+    schedule_entity:
+      name: Schedule
+      description: The Schedule Helper you created
+      selector:
+        entity:
+          domain: schedule
+    switch_target:
+      name: Switch / Smart Plug
+      description: Your IKEA smart plug (or any switch entity)
+      selector:
+        target:
+          entity:
+            domain: switch
+
+mode: single
+
+variables:
+  schedule_input: !input schedule_entity
+
+trigger:
+  - platform: state
+    entity_id: !input schedule_entity
+    id: schedule_changed
+  - platform: homeassistant
+    event: start
+    id: ha_restarted
+
+action:
+  - service: "homeassistant.turn_{{ states(schedule_input) }}"
+    target: !input switch_target
