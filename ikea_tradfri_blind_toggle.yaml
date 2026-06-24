@@ -11,9 +11,8 @@ blueprint:
       description: 選擇你的 TRÅDFRI Open/Close Remote
       selector:
         device:
-          integration: zha
-          manufacturer: IKEA of Sweden
-          model: TRADFRI open/close remote
+          integration: mqtt
+          manufacturer: IKEA
 
     smart_plug:
       name: Smart Plug（風扇插座）
