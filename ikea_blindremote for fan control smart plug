@@ -1,14 +1,15 @@
 blueprint:
-  name: IKEA E1766 → Toggle Smart Plug / Fan (Zigbee2MQTT)
+  name: IKEA E1766 → 分開設定開關風扇 (Zigbee2MQTT)
   description: |
-    用 IKEA E1766 窗簾遙控器（Zigbee2MQTT）控制 Smart Plug 開關風扇
-    上鍵 / 下鍵 皆可 Toggle（可自行選擇）
+    用 E1766 遙控器分開控制風扇：
+    - 一個按鈕開風扇（Turn ON）
+    - 另一個按鈕關風扇（Turn OFF）
   domain: automation
 
   input:
     remote:
-      name: IKEA E1766 Remote
-      description: 選擇你的 E1766 遙控器
+      name: IKEA E1766 遙控器
+      description: 選擇你的 E1766
       selector:
         device:
           integration: mqtt
@@ -16,17 +17,23 @@ blueprint:
 
     smart_plug:
       name: Smart Plug（風扇）
-      description: 選擇控制風扇的 Smart Plug
       selector:
         entity:
           domain: switch
 
-    button_action:
-      name: 使用哪個按鈕 Toggle
+    on_button:
+      name: 開風扇的按鈕動作
       description: |
-        常見值（請在 Developer Tools → Events 按一下遙控器確認）：
-        - open（或 up_single）
-        - close（或 down_single）
+        例如：open、up_single、up_short
+        （請先去 Developer Tools → Events 按一下按鈕確認名稱）
+      selector:
+        text:
+
+    off_button:
+      name: 關風扇的按鈕動作
+      description: |
+        例如：close、down_single、down_short
+        （請先去 Developer Tools → Events 按一下按鈕確認名稱）
       selector:
         text:
 
@@ -35,12 +42,32 @@ trigger:
     domain: mqtt
     device_id: !input remote
     type: action
-    subtype: !input button_action
-    id: toggle
+    subtype: !input on_button
+    id: turn_on
+
+  - platform: device
+    domain: mqtt
+    device_id: !input remote
+    type: action
+    subtype: !input off_button
+    id: turn_off
 
 action:
-  - service: switch.toggle
-    target:
-      entity_id: !input smart_plug
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: turn_on
+        sequence:
+          - service: switch.turn_on
+            target:
+              entity_id: !input smart_plug
+
+      - conditions:
+          - condition: trigger
+            id: turn_off
+        sequence:
+          - service: switch.turn_off
+            target:
+              entity_id: !input smart_plug
 
 mode: single
